@@ -3,6 +3,7 @@ name = "binage"
 version = "0.1.0"
 description = "A tiny cross-platform manager for portable binaries"
 license = "MIT"
+edition = "2021"
 
 [dependencies]
 anyhow = "1"
@@ -13,5 +14,6 @@ serde_json = "1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
-    "Win32_System_Registry"
+    "Win32_Storage_FileSystem",
+	"Win32_System_Registry",
 ] }

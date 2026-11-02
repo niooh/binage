@@ -167,7 +167,7 @@ pub fn add_to_path(bin_dir: &Path) -> Result<bool> {
             return Ok(false);
         }
 
-        let mut updated = original_value.clone();
+        let mut updated = original_value.to_owned();
 
         if !updated.is_empty() && !updated.ends_with(';') {
             updated.push(';');

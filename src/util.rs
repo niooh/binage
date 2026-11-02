@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use std::{
     fs,
     io,
-    path::{Path, PathBuf},
+    path::{Path},
 };
 
 /// Return the command name for an executable entry.
