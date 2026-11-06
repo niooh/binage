@@ -85,11 +85,3 @@ pub fn prepare_root(path: Option<PathBuf>) -> Result<PathBuf> {
         .with_context(|| format!("cannot resolve {}", root.display()))?;
     Ok(root)
 }
-
-pub fn ensure_inside(base: &Path, candidate: &Path) -> Result<()> {
-    if !candidate.starts_with(base) {
-        bail!("entry escapes the package directory: {}", candidate.display());
-    }
-    Ok(())
-}
-

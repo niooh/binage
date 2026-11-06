@@ -259,20 +259,17 @@ fn add_binary(
     let mut backups = Vec::new();
 
     let result = (|| -> Result<()> {
-        let mut index = 0;
+		// Stage the old binary.
+		if let Some(old_path) = &old_binary {
+			move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
+		}
 
-        // Stage the old binary.
-        if let Some(old_path) = &old_binary {
-            move_to_backup(old_path, &backup_dir, index, &mut backups)?;
-            index += 1;
-        }
-
-        // Stage the Unix extensionless .exe alias, if present.
-        #[cfg(unix)]
-        if old_record.is_some() {
-            let alias = bin_dir.join(&name);
-            move_to_backup(&alias, &backup_dir, index, &mut backups)?;
-        }
+		// Stage the Unix extensionless .exe alias, if present.
+		#[cfg(unix)]
+		if old_record.is_some() {
+			let alias = bin_dir.join(&name);
+			move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
+		}
 
         // Check for other command-name conflicts after staging the
         // old managed binary and its alias.

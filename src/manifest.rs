@@ -48,11 +48,6 @@ impl Manifest {
             .with_context(|| format!("cannot replace {}", path.display()))?;
         Ok(())
     }
-
-    pub fn has_entry(&self, name: &str) -> bool {
-        self.binaries.contains_key(name) ||
-            self.packages.values().any(|p| p.entries.contains_key(name))
-    }
 }
 
 
