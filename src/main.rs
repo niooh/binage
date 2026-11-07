@@ -19,9 +19,9 @@ fn run() -> Result<()> {
     let cli = cli::Cli::parse();
     match cli.command {
         cli::Command::Init { path } => commands::init::run(path),
+        cli::Command::Destruct => commands::destruct::run(),
         cli::Command::Add { source, entries } => commands::add::run(source, entries),
         cli::Command::Remove { entry } => commands::remove::run(&entry),
         cli::Command::Ls => commands::ls::run(),
     }
 }
-

@@ -28,7 +28,10 @@ pub struct PackageRecord {
 impl Manifest {
     pub fn load(path: &Path) -> Result<Self> {
         if !path.exists() {
-            return Ok(Self { schema_version: 1, ..Default::default() });
+            return Ok(Self {
+                schema_version: 1,
+                ..Default::default()
+            });
         }
         let bytes = fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
         let mut value: Self = serde_json::from_slice(&bytes)
@@ -36,7 +39,11 @@ impl Manifest {
         if value.schema_version == 0 {
             value.schema_version = 1;
         }
-        anyhow::ensure!(value.schema_version == 1, "unsupported manifest schema {}", value.schema_version);
+        anyhow::ensure!(
+            value.schema_version == 1,
+            "unsupported manifest schema {}",
+            value.schema_version
+        );
         Ok(value)
     }
 
@@ -44,13 +51,10 @@ impl Manifest {
         let bytes = serde_json::to_vec_pretty(self)?;
         let temp = path.with_extension("json.tmp");
         fs::write(&temp, bytes)?;
-        replace_file(&temp, path)
-            .with_context(|| format!("cannot replace {}", path.display()))?;
+        replace_file(&temp, path).with_context(|| format!("cannot replace {}", path.display()))?;
         Ok(())
     }
 }
-
-
 
 #[cfg(not(windows))]
 fn replace_file(temp: &Path, destination: &Path) -> Result<()> {
@@ -60,10 +64,16 @@ fn replace_file(temp: &Path, destination: &Path) -> Result<()> {
 
 #[cfg(windows)]
 fn replace_file(temp: &Path, destination: &Path) -> Result<()> {
-    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH};
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
 
     let temp_wide: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
-    let destination_wide: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination_wide: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
 
     let flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
     let succeeded = unsafe { MoveFileExW(temp_wide.as_ptr(), destination_wide.as_ptr(), flags) };

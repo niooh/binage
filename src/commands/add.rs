@@ -69,10 +69,7 @@ fn validate_single_component(value: &str) -> Result<()> {
 fn create_backup_dir(root: &Path) -> Result<PathBuf> {
     loop {
         let id = BACKUP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = root.join(format!(
-            ".binage-backup-{}-{id}",
-            std::process::id()
-        ));
+        let path = root.join(format!(".binage-backup-{}-{id}", std::process::id()));
 
         match fs::create_dir(&path) {
             Ok(()) => return Ok(path),
@@ -97,9 +94,8 @@ fn move_to_backup(
     }
 
     let backup = backup_dir.join(index.to_string());
-    fs::rename(path, &backup).with_context(|| {
-        format!("Cannot move {} into temporary backup", path.display())
-    })?;
+    fs::rename(path, &backup)
+        .with_context(|| format!("Cannot move {} into temporary backup", path.display()))?;
 
     backups.push((path.to_path_buf(), backup));
     Ok(())
@@ -111,11 +107,7 @@ fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<()> {
 
     for (original, backup) in backups.iter().rev() {
         if let Err(error) = fs::rename(backup, original) {
-            errors.push(format!(
-                "{}: {}",
-                original.display(),
-                error
-            ));
+            errors.push(format!("{}: {}", original.display(), error));
         }
     }
 
@@ -173,13 +165,11 @@ fn validate_managed_binary_alias(alias: &Path, binary: &Path) -> Result<()> {
         );
     }
 
-    let actual = fs::canonicalize(alias).with_context(|| {
-        format!("Cannot resolve command alias: {}", alias.display())
-    })?;
+    let actual = fs::canonicalize(alias)
+        .with_context(|| format!("Cannot resolve command alias: {}", alias.display()))?;
 
-    let expected = fs::canonicalize(binary).with_context(|| {
-        format!("Cannot resolve installed binary: {}", binary.display())
-    })?;
+    let expected = fs::canonicalize(binary)
+        .with_context(|| format!("Cannot resolve installed binary: {}", binary.display()))?;
 
     if actual != expected {
         bail!(
@@ -206,7 +196,11 @@ fn add_binary(
     let bin_dir = root.join("bin");
 
     // A binary cannot replace a package entry.
-    if manifest.packages.values().any(|p| p.entries.contains_key(&name)) {
+    if manifest
+        .packages
+        .values()
+        .any(|p| p.entries.contains_key(&name))
+    {
         bail!("entry `{name}` belongs to an installed package and cannot be replaced by a binary");
     }
 
@@ -242,7 +236,10 @@ fn add_binary(
         let is_old_binary = old_binary.as_deref() == Some(destination.as_path());
 
         if !is_old_binary {
-            bail!("destination already exists and is not managed by binage: {}", destination.display());
+            bail!(
+                "destination already exists and is not managed by binage: {}",
+                destination.display()
+            );
         }
     }
 
@@ -259,27 +256,24 @@ fn add_binary(
     let mut backups = Vec::new();
 
     let result = (|| -> Result<()> {
-		// Stage the old binary.
-		if let Some(old_path) = &old_binary {
-			move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
-		}
+        // Stage the old binary.
+        if let Some(old_path) = &old_binary {
+            move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
+        }
 
-		// Stage the Unix extensionless .exe alias, if present.
-		#[cfg(unix)]
-		if old_record.is_some() {
-			let alias = bin_dir.join(&name);
-			move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
-		}
+        // Stage the Unix extensionless .exe alias, if present.
+        #[cfg(unix)]
+        if old_record.is_some() {
+            let alias = bin_dir.join(&name);
+            move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
+        }
 
         // Check for other command-name conflicts after staging the
         // old managed binary and its alias.
         util::check_entry_available(&bin_dir, &name)?;
 
         if util::path_occupied(&destination) {
-            bail!(
-                "destination already exists: {}",
-                destination.display()
-            );
+            bail!("destination already exists: {}", destination.display());
         }
 
         util::copy_file(source, &destination)?;
@@ -315,9 +309,7 @@ fn add_binary(
         finish_backup(&backup_dir);
 
         if let Err(restore_error) = restore_result {
-            return Err(restore_error.context(format!(
-                "Installation failed: {error:#}"
-            )));
+            return Err(restore_error.context(format!("Installation failed: {error:#}")));
         }
 
         return Err(error);
@@ -413,11 +405,9 @@ fn add_package(
             bail!("entry name `{name}` is already registered as a binary");
         }
 
-        let belongs_to_other_package = manifest.packages.iter().any(
-            |(existing_name, package)| {
-                existing_name != &package_name && package.entries.contains_key(&name)
-            },
-        );
+        let belongs_to_other_package = manifest.packages.iter().any(|(existing_name, package)| {
+            existing_name != &package_name && package.entries.contains_key(&name)
+        });
 
         if belongs_to_other_package {
             bail!("entry name `{name}` belongs to another installed package");
@@ -429,10 +419,7 @@ fn add_package(
 
         let relative = candidate.strip_prefix(source)?.to_path_buf();
 
-        selected.insert(
-            name.clone(),
-            relative.to_string_lossy().into_owned(),
-        );
+        selected.insert(name.clone(), relative.to_string_lossy().into_owned());
 
         names.push((name, relative));
     }
@@ -448,11 +435,7 @@ fn add_package(
             let launcher = launcher_path(&bin_dir, name);
 
             if util::path_occupied(&launcher) {
-                validate_managed_launcher(
-                    &launcher,
-                    &bin_dir,
-                    &packages_dir,
-                )?;
+                validate_managed_launcher(&launcher, &bin_dir, &packages_dir)?;
 
                 old_launchers.push(launcher);
             }
@@ -466,21 +449,11 @@ fn add_package(
     let result = (|| -> Result<()> {
         // Stage old launchers first.
         for (index, launcher) in old_launchers.iter().enumerate() {
-            move_to_backup(
-                launcher,
-                &backup_dir,
-                index,
-                &mut backups,
-            )?;
+            move_to_backup(launcher, &backup_dir, index, &mut backups)?;
         }
 
         // Stage the old package directory.
-        move_to_backup(
-            &destination,
-            &backup_dir,
-            old_launchers.len(),
-            &mut backups,
-        )?;
+        move_to_backup(&destination, &backup_dir, old_launchers.len(), &mut backups)?;
 
         // Check that new names do not collide with unrelated files.
         for (name, _) in &names {
@@ -522,9 +495,7 @@ fn add_package(
         finish_backup(&backup_dir);
 
         if let Err(restore_error) = restore_result {
-            return Err(restore_error.context(format!(
-                "Package installation failed: {error:#}"
-            )));
+            return Err(restore_error.context(format!("Package installation failed: {error:#}")));
         }
 
         return Err(error);
@@ -612,11 +583,7 @@ fn rollback_launchers(bin_dir: &Path, names: &[String]) {
 }
 
 /// Verify that an existing launcher belongs to binage.
-fn validate_managed_launcher(
-    launcher: &Path,
-    bin_dir: &Path,
-    packages_dir: &Path,
-) -> Result<()> {
+fn validate_managed_launcher(launcher: &Path, bin_dir: &Path, packages_dir: &Path) -> Result<()> {
     let metadata = fs::symlink_metadata(launcher)?;
 
     #[cfg(unix)]
@@ -628,9 +595,8 @@ fn validate_managed_launcher(
             );
         }
 
-        let target = fs::canonicalize(launcher).with_context(|| {
-            format!("Cannot resolve launcher target: {}", launcher.display())
-        })?;
+        let target = fs::canonicalize(launcher)
+            .with_context(|| format!("Cannot resolve launcher target: {}", launcher.display()))?;
 
         let packages_root = fs::canonicalize(packages_dir).with_context(|| {
             format!(

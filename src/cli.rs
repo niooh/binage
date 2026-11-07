@@ -16,6 +16,7 @@ pub enum Command {
         #[arg(long)]
         path: Option<PathBuf>,
     },
+    Destruct,
     /// Install a single binary, or a directory with one or more entry files.
     Add {
         /// Source file or directory.
@@ -31,4 +32,3 @@ pub enum Command {
     /// List installed command entries.
     Ls,
 }
-

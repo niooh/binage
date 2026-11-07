@@ -1,9 +1,5 @@
 use anyhow::{bail, Context, Result};
-use std::{
-    fs,
-    io,
-    path::{Path},
-};
+use std::{fs, io, path::Path};
 
 /// Return the command name for an executable entry.
 ///
@@ -25,10 +21,7 @@ pub fn command_name(path: &Path) -> Result<String> {
         bail!("invalid entry name");
     }
 
-    let name = if file_name
-        .to_ascii_lowercase()
-        .ends_with(".exe")
-    {
+    let name = if file_name.to_ascii_lowercase().ends_with(".exe") {
         file_name[..file_name.len() - 4].to_string()
     } else {
         file_name
@@ -153,4 +146,3 @@ pub fn check_entry_available(bin_dir: &Path, name: &str) -> Result<()> {
 
     Ok(())
 }
-

@@ -1,4 +1,3 @@
-
 use anyhow::{bail, Context, Result};
 use std::{
     fs,
@@ -68,11 +67,9 @@ fn install_self(
     manifest_path: &Path,
     manifest: &mut Manifest,
 ) -> Result<bool> {
-    let source = std::env::current_exe()
-        .context("cannot determine the current executable path")?;
+    let source = std::env::current_exe().context("cannot determine the current executable path")?;
 
-    let source = fs::canonicalize(&source)
-        .context("cannot resolve the current executable path")?;
+    let source = fs::canonicalize(&source).context("cannot resolve the current executable path")?;
 
     let file_name = source
         .file_name()
@@ -83,9 +80,7 @@ fn install_self(
     let name = util::command_name(&source)?;
 
     if name != "binage" {
-        bail!(
-            "unexpected executable name `{name}`; expected `binage`"
-        );
+        bail!("unexpected executable name `{name}`; expected `binage`");
     }
 
     // Do not allow binage to take over a package entry with the same name.
@@ -94,9 +89,7 @@ fn install_self(
         .values()
         .any(|package| package.entries.contains_key(&name))
     {
-        bail!(
-            "cannot register `{name}`: the command name belongs to an installed package"
-        );
+        bail!("cannot register `{name}`: the command name belongs to an installed package");
     }
 
     let destination = bin_dir.join(&file_name);
@@ -180,9 +173,7 @@ fn install_self(
             let _ = fs::remove_file(temp);
 
             if let Some(backup_path) = &backup {
-                if let Err(restore_error) =
-                    fs::rename(backup_path, &destination)
-                {
+                if let Err(restore_error) = fs::rename(backup_path, &destination) {
                     bail!(
                         "installation failed: {error}; additionally failed to restore the previous executable: {restore_error}"
                     );
@@ -190,21 +181,13 @@ fn install_self(
             }
 
             return Err(error).with_context(|| {
-                format!(
-                    "cannot install executable at {}",
-                    destination.display()
-                )
+                format!("cannot install executable at {}", destination.display())
             });
         }
     }
 
     // Register the executable only after the filesystem operation succeeds.
-    manifest.binaries.insert(
-        name,
-        BinaryRecord {
-            file_name,
-        },
-    );
+    manifest.binaries.insert(name, BinaryRecord { file_name });
 
     if let Err(error) = manifest.save(manifest_path) {
         // Roll back the executable if manifest persistence fails.
@@ -213,9 +196,7 @@ fn install_self(
         }
 
         if let Some(backup_path) = &backup {
-            if let Err(restore_error) =
-                fs::rename(backup_path, &destination)
-            {
+            if let Err(restore_error) = fs::rename(backup_path, &destination) {
                 bail!(
                     "manifest update failed: {error}; additionally failed to restore the previous executable: {restore_error}"
                 );

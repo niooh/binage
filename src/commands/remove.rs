@@ -53,7 +53,10 @@ pub fn run(name: &str) -> Result<()> {
         .packages
         .iter()
         .find_map(|(package_name, package)| {
-            package.entries.contains_key(name).then(|| package_name.clone())
+            package
+                .entries
+                .contains_key(name)
+                .then(|| package_name.clone())
         });
 
     let Some(package_name) = package_name else {
@@ -68,11 +71,7 @@ pub fn run(name: &str) -> Result<()> {
     let launcher_path = launcher_path(&bin_dir, name);
 
     // Validate ownership before changing the manifest.
-    let launcher_exists = validate_managed_launcher(
-        &launcher_path,
-        &bin_dir,
-        &packages_dir,
-    )?;
+    let launcher_exists = validate_managed_launcher(&launcher_path, &bin_dir, &packages_dir)?;
 
     validate_single_component(&package.directory)?;
     let package_directory = packages_dir.join(&package.directory);
@@ -90,9 +89,8 @@ pub fn run(name: &str) -> Result<()> {
     manifest.save(&manifest_path)?;
 
     if launcher_exists {
-        fs::remove_file(&launcher_path).with_context(|| {
-            format!("Failed to remove launcher: {}", launcher_path.display())
-        })?;
+        fs::remove_file(&launcher_path)
+            .with_context(|| format!("Failed to remove launcher: {}", launcher_path.display()))?;
     }
 
     if package_is_empty {
@@ -129,20 +127,15 @@ fn launcher_path(bin_dir: &Path, name: &str) -> PathBuf {
 /// Validate that an existing launcher belongs to binage.
 ///
 /// Returns false if the launcher does not exist.
-fn validate_managed_launcher(
-    launcher: &Path,
-    bin_dir: &Path,
-    packages_dir: &Path,
-) -> Result<bool> {
+fn validate_managed_launcher(launcher: &Path, bin_dir: &Path, packages_dir: &Path) -> Result<bool> {
     let metadata = match fs::symlink_metadata(launcher) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(false);
         }
         Err(error) => {
-            return Err(error).with_context(|| {
-                format!("Failed to inspect launcher: {}", launcher.display())
-            });
+            return Err(error)
+                .with_context(|| format!("Failed to inspect launcher: {}", launcher.display()));
         }
     };
 
@@ -155,9 +148,8 @@ fn validate_managed_launcher(
             );
         }
 
-        let link_target = fs::read_link(launcher).with_context(|| {
-            format!("Failed to read launcher symlink: {}", launcher.display())
-        })?;
+        let link_target = fs::read_link(launcher)
+            .with_context(|| format!("Failed to read launcher symlink: {}", launcher.display()))?;
 
         let resolved_target = if link_target.is_absolute() {
             lexical_normalize(&link_target)?
@@ -191,9 +183,8 @@ fn validate_managed_launcher(
             );
         }
 
-        let contents = fs::read_to_string(launcher).with_context(|| {
-            format!("Failed to read launcher: {}", launcher.display())
-        })?;
+        let contents = fs::read_to_string(launcher)
+            .with_context(|| format!("Failed to read launcher: {}", launcher.display()))?;
 
         let has_marker = contents
             .lines()
@@ -256,9 +247,8 @@ fn is_managed_binary_alias(alias: &Path, binary: &Path) -> Result<bool> {
     let target = fs::read_link(alias)
         .with_context(|| format!("Failed to read command alias: {}", alias.display()))?;
 
-    let expected = fs::canonicalize(binary).with_context(|| {
-        format!("Failed to resolve installed binary: {}", binary.display())
-    })?;
+    let expected = fs::canonicalize(binary)
+        .with_context(|| format!("Failed to resolve installed binary: {}", binary.display()))?;
 
     let actual = if target.is_absolute() {
         fs::canonicalize(&target)
@@ -270,7 +260,12 @@ fn is_managed_binary_alias(alias: &Path, binary: &Path) -> Result<bool> {
                 .join(target),
         )
     }
-    .with_context(|| format!("Failed to resolve command alias target: {}", alias.display()))?;
+    .with_context(|| {
+        format!(
+            "Failed to resolve command alias target: {}",
+            alias.display()
+        )
+    })?;
 
     if actual != expected {
         bail!(
@@ -319,4 +314,3 @@ fn remove_package_directory_if_present(path: &Path) -> Result<()> {
         Err(error) => Err(error.into()),
     }
 }
-
