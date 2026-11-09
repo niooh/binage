@@ -18,6 +18,11 @@ cargo build --release
 
 The binary is `target/release/binage` (Windows: `binage.exe`).
 
+or:
+```powershell
+./scripts/install.ps1
+```
+
 ## Quick start
 
 ```sh

@@ -11,6 +11,9 @@ use crate::{
 
 /// Remove an installed command or package entry.
 pub fn run(name: &str) -> Result<()> {
+    if name == "binage" {
+        bail!("cannot remove the binage executable itself");
+    }
     if name.is_empty() || name.contains('/') || name.contains('\\') {
         bail!("Invalid command name: {name}");
     }
