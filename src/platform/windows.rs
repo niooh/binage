@@ -1,3 +1,4 @@
+
 use anyhow::{bail, Context, Result};
 use std::{path::Path, ptr};
 
@@ -7,12 +8,36 @@ use windows_sys::Win32::{
         RegCloseKey, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
         KEY_QUERY_VALUE, KEY_SET_VALUE, REG_EXPAND_SZ, REG_SZ,
     },
+    UI::WindowsAndMessaging::{
+        SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
+    },
 };
 
 const ERROR_SUCCESS: u32 = 0;
 
 fn wide_null(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Notify applications that the user's environment variables have changed.
+///
+/// This is best-effort: a notification failure does not undo a successful
+/// registry update.
+fn broadcast_environment_change() {
+    let environment = wide_null("Environment");
+    let mut message_result = 0usize;
+
+    unsafe {
+        SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            environment.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            5000,
+            &mut message_result,
+        );
+    }
 }
 
 /// Convert a canonical Windows path into a normal path suitable for PATH.
@@ -162,6 +187,9 @@ fn write_path_value(key: HKEY, value_type: u32, value: &str) -> Result<()> {
         bail!("Failed to update PATH (error code: {status}).");
     }
 
+    // The registry update succeeded. Notify applications about the change.
+    broadcast_environment_change();
+
     Ok(())
 }
 
@@ -220,6 +248,9 @@ pub fn add_to_path(bin_dir: &Path) -> Result<bool> {
             .any(|entry| normalize_path_entry(entry) == target_normalized);
 
         if already_exists {
+            // The PATH entry may already be in the registry while existing
+            // processes still hold an older environment block.
+            broadcast_environment_change();
             return Ok(false);
         }
 
