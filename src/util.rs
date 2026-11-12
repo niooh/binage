@@ -56,7 +56,6 @@ pub fn copy_file(source: &Path, destination: &Path) -> Result<()> {
             })?;
 
         io::copy(&mut input, &mut output)?;
-        output.sync_all()?;
         drop(output);
 
         fs::set_permissions(destination, metadata.permissions())?;
