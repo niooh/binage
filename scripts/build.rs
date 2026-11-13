@@ -37,6 +37,13 @@ fn main() {
         .arg("binage_shim")
         .arg("--crate-type")
         .arg("bin")
+		.args([
+			"-C", "opt-level=3",
+			"-C", "panic=abort",
+			"-C", "codegen-units=1",
+			"-C", "strip=symbols",
+			"-C", "lto=fat",
+		])
         .arg("--edition=2021")
         .arg("--target")
         .arg(&target)

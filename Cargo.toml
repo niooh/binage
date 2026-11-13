@@ -21,3 +21,11 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI",
     "Win32_UI_WindowsAndMessaging"
 ] }
+
+[profile.release]
+opt-level = 3
+strip = "symbols"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
