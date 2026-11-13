@@ -128,7 +128,7 @@ fn finish_backup(backup_dir: &Path) {
 fn launcher_path(bin_dir: &Path, name: &str) -> PathBuf {
     #[cfg(windows)]
     {
-        bin_dir.join(format!("{name}.cmd"))
+        bin_dir.join(format!("{name}.exe"))
     }
 
     #[cfg(not(windows))]
@@ -548,29 +548,36 @@ fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
-    use std::io::Write;
+fn create_launcher(
+    bin_dir: &Path,
+    name: &str,
+    target: &Path,
+) -> Result<()> {
+    let launcher = bin_dir.join(format!("{name}.exe"));
 
-    let launcher = bin_dir.join(format!("{name}.cmd"));
+    if util::path_occupied(&launcher) {
+        bail!("launcher already exists: {}", launcher.display());
+    }
 
-    let target = target
-        .to_str()
-        .context("launcher path is not valid Unicode")?;
+    let root = bin_dir
+        .parent()
+        .context("bin directory has no parent")?;
 
-    let target = target.replace('%', "%%");
+    let relative_target = target
+        .strip_prefix(root)
+        .context("launcher target is outside binage root")?;
 
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&launcher)?;
-
-    writeln!(file, "@echo off")?;
-    writeln!(file, "rem binage-managed-launcher")?;
-    writeln!(file, "setlocal DisableDelayedExpansion")?;
-    writeln!(file, "\"{target}\" %*")?;
-    writeln!(file, "exit /b %errorlevel%")?;
-
-    file.sync_all()?;
+	crate::shim::write_launcher(
+		crate::SHIM_TEMPLATE,
+		&launcher,
+		relative_target,
+	)
+    .with_context(|| {
+        format!(
+            "failed to create launcher: {}",
+            launcher.display()
+        )
+    })?;
 
     Ok(())
 }

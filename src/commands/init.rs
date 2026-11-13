@@ -1,4 +1,3 @@
-
 use anyhow::{bail, Context, Result};
 use std::{
     fs,
@@ -38,15 +37,9 @@ pub fn run(path: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn install_self(
-    bin_dir: &Path,
-    manifest_path: &Path,
-    manifest: &mut Manifest,
-) -> Result<bool> {
-    let source = std::env::current_exe()
-        .context("cannot determine the current executable path")?;
-    let source = fs::canonicalize(&source)
-        .context("cannot resolve the current executable path")?;
+fn install_self(bin_dir: &Path, manifest_path: &Path, manifest: &mut Manifest) -> Result<bool> {
+    let source = std::env::current_exe().context("cannot determine the current executable path")?;
+    let source = fs::canonicalize(&source).context("cannot resolve the current executable path")?;
 
     let file_name = source
         .file_name()
@@ -188,7 +181,10 @@ fn confirm_overwrite(message: &str) -> Result<bool> {
 fn unique_path(dir: &Path, prefix: &str, suffix: &str) -> Result<PathBuf> {
     loop {
         let id = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = dir.join(format!("{prefix}{}{suffix}", format!("{}-{id}", std::process::id())));
+        let path = dir.join(format!(
+            "{prefix}{}{suffix}",
+            format!("{}-{id}", std::process::id())
+        ));
 
         match fs::symlink_metadata(&path) {
             Ok(_) => continue,

@@ -118,7 +118,7 @@ fn validate_single_component(value: &str) -> Result<()> {
 fn launcher_path(bin_dir: &Path, name: &str) -> PathBuf {
     #[cfg(windows)]
     {
-        bin_dir.join(format!("{name}.cmd"))
+        bin_dir.join(format!("{name}.exe"))
     }
 
     #[cfg(not(windows))]
@@ -186,22 +186,20 @@ fn validate_managed_launcher(launcher: &Path, bin_dir: &Path, packages_dir: &Pat
             );
         }
 
-        let contents = fs::read_to_string(launcher)
-            .with_context(|| format!("Failed to read launcher: {}", launcher.display()))?;
+        // Read the embedded target path.
+        let relative_target = crate::shim::read_target(launcher)
+            .with_context(|| format!("Failed to validate binage shim: {}", launcher.display()))?;
 
-        let has_marker = contents
-            .lines()
-            .any(|line| line.trim() == "rem binage-managed-launcher");
+        let root = bin_dir.parent().context("bin directory has no parent")?;
 
-        if !has_marker {
+        let resolved_target = root.join(relative_target);
+
+        if !resolved_target.starts_with(packages_dir) {
             bail!(
-                "Refusing to remove a launcher without the binage ownership marker: {}",
+                "Refusing to remove a shim that points outside packages: {}",
                 launcher.display()
             );
         }
-
-        let _ = bin_dir;
-        let _ = packages_dir;
 
         Ok(true)
     }

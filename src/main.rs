@@ -5,6 +5,13 @@ mod manifest;
 mod platform;
 mod util;
 
+#[cfg(windows)]
+mod shim;
+
+#[cfg(windows)]
+static SHIM_TEMPLATE: &[u8] =
+    include_bytes!(env!("BINAGE_SHIM_PATH"));
+
 use anyhow::Result;
 use clap::Parser;
 
