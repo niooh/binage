@@ -1,24 +1,27 @@
 # binage
 
+binage = **bin**ary ma**nager**
+
 A tiny cross-platform manager for portable binaries: single executables and
 self-contained application folders.
 
 ## Features
 
-- Install a standalone executable, or a whole directory as a package
-- No overwrites: conflicting names abort the command
-- Verifies ownership before removing anything
-- Unix symlinks, Windows `.cmd` launchers
+- **Binary installation**: Install standalone executables into a centralized directory (`bin/`)
+- **Package management**: Install application directories and expose selected executables as commands
+- **Cross-platform launchers**: Use Unix symlinks or native Windows `.exe` launchers
+- **Conflict prevention**: Refuse to overwrite existing files or commands
+- **Safe removal**: Verify file ownership before deleting managed files
 
 ## Install
 
 ```sh
 cargo build --release
+# Get `target/release/binage` (Windows: `binage.exe`).
 ```
 
-The binary is `target/release/binage` (Windows: `binage.exe`).
-
 or:
+
 ```powershell
 ./scripts/install.ps1
 ```
@@ -39,18 +42,12 @@ Open a new terminal afterwards. The root defaults to `~/.local/binage`
 
 | Command | Description |
 | --- | --- |
-| `binage init [--path DIR]` | Create the install root and configure PATH. `--path` applies to the first init only. |
-| `binage add FILE` | Copy a single executable into `bin/`. The source is left untouched. |
-| `binage add DIR -e FILE...` | Copy a directory into `packages/` and register one command per entry. `-e` is required. |
-| `binage ls` | List installed commands. |
-| `binage remove NAME` | Remove a command by name. |
-
-Command names come from the filename with a trailing `.exe` removed; other
-extensions are kept. Entry paths for `add DIR` must be relative and point to
-regular files.
-
-`remove` accepts a command name, not a package name. Removing a package's last
-entry deletes its directory, and only files created by binage are deleted.
+| `init [--path DIR]` | Create the install root and configure PATH. `--path` applies to the first init only. |
+| `add <FILE>` | Copy a single executable into `bin/`. |
+| `add <DIR> -e <FILES>` | Copy a directory into `packages/` and register one command per entry. |
+| `ls` | List installed commands. |
+| `remove <NAME>` | Remove a command by name. |
+| `destruct` | Remove the binage installation, including its managed files and PATH entry. |
 
 ## Limitations
 
