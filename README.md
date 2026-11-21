@@ -2,8 +2,7 @@
 
 binage = **bin**ary ma**nager**
 
-A tiny cross-platform manager for portable binaries: single executables and
-self-contained application folders.
+A tiny cross-platform manager for portable binaries, enabling convenient management of standalone executables and self-contained application folders through intuitive commands.
 
 ## Features
 
@@ -20,7 +19,7 @@ cargo build --release
 # Get `target/release/binage` (Windows: `binage.exe`).
 ```
 
-or:
+or use a PowerShell script in Windows:
 
 ```powershell
 ./scripts/install.ps1
@@ -51,5 +50,5 @@ Open a new terminal afterwards. The root defaults to `~/.local/binage`
 
 ## Limitations
 
-- No dependency resolution
-- No update or upgrade
+- Dependencies are not resolved automatically.
+- Updates and upgrades should be handled manually.
