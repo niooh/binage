@@ -205,6 +205,7 @@ fn add_binary(
     }
 
     let old_record = manifest.binaries.get(&name);
+    let has_old_record = old_record.is_some();
     let file_name = source.file_name().context("missing filename")?;
     let destination = bin_dir.join(file_name);
 
@@ -243,7 +244,7 @@ fn add_binary(
         }
     }
 
-    if old_record.is_some() {
+    if has_old_record {
         if !confirm_overwrite(&format!(
             "Binary `{name}` is already managed by binage. Overwrite it?"
         ))? {
@@ -263,7 +264,7 @@ fn add_binary(
 
         // Stage the Unix extensionless .exe alias, if present.
         #[cfg(unix)]
-        if old_record.is_some() {
+        if has_old_record {
             let alias = bin_dir.join(&name);
             move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
         }
