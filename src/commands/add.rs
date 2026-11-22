@@ -536,7 +536,6 @@ fn add_package(
         names.push((name, relative));
     }
 
-    reject_symlinks(source)?;
 
     // Collect binaries whose command names are being transferred to this package.
     let mut binary_replacements = Vec::new();
@@ -681,26 +680,6 @@ fn add_package(
     Ok(())
 }
 
-fn reject_symlinks(dir: &Path) -> Result<()> {
-    for item in fs::read_dir(dir)? {
-        let item = item?;
-        let path = item.path();
-        let metadata = fs::symlink_metadata(&path)?;
-        let kind = metadata.file_type();
-
-        if kind.is_symlink() {
-            bail!("package contains a symbolic link: {}", path.display());
-        }
-
-        if kind.is_dir() {
-            reject_symlinks(&path)?;
-        } else if !kind.is_file() {
-            bail!("unsupported filesystem entry: {}", path.display());
-        }
-    }
-
-    Ok(())
-}
 
 #[cfg(unix)]
 fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
