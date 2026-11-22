@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod config;
+mod entries;
 mod manifest;
 mod platform;
 mod util;
@@ -29,6 +30,7 @@ fn run() -> Result<()> {
         cli::Command::Destruct => commands::destruct::run(),
         cli::Command::Add { source, entries } => commands::add::run(source, entries),
         cli::Command::Remove { entry } => commands::remove::run(&entry),
+		cli::Command::Search { query } => commands::search::run(&query),
         cli::Command::Ls => commands::ls::run(),
     }
 }

@@ -25,10 +25,15 @@ pub enum Command {
         #[arg(short = 'e', long = "entry", num_args = 1.., value_name = "FILE")]
         entries: Vec<PathBuf>,
     },
+    /// List installed command entries.
+    Ls,
     /// Uninstall an installed entry by its command name.
     Remove {
         entry: String,
     },
-    /// List installed command entries.
-    Ls,
+	/// Search installed commands by partial name.
+	Search {
+		/// Keyword to search for.
+		query: String,
+	},
 }
