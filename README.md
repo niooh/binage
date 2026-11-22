@@ -31,6 +31,7 @@ or use a PowerShell script in Windows:
 binage init
 binage add ./portable-tool
 binage ls
+# All commands are easy to understand for users of Git, npm, and Scoop ...
 ```
 
 `init` creates the install root and adds its `bin/` directory to your PATH once.
@@ -44,8 +45,9 @@ Open a new terminal afterwards. The root defaults to `~/.local/binage`
 | `init [--path DIR]` | Create the install root and configure PATH. `--path` applies to the first init only. |
 | `add <FILE>` | Copy a single executable into `bin/`. |
 | `add <DIR> -e <FILES>` | Copy a directory into `packages/` and register one command per entry. |
-| `ls` | List installed commands. |
+| `ls / list` | List installed commands. |
 | `remove <NAME>` | Remove a command by name. |
+| `search <NAME>` | Search installed commands by partial name. |
 | `destruct` | Remove the binage installation, including its managed files and PATH entry. |
 
 ## Limitations
