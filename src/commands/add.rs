@@ -77,14 +77,12 @@ fn confirm_overwrite(message: &str) -> Result<bool> {
     Ok(matches!(input.trim(), "y" | "Y"))
 }
 
-fn authorize_overwrite(
-    policy: OverwritePolicy,
-    message: &str,
-) -> Result<bool> {
-    match policy {
-        OverwritePolicy::Ask => confirm_overwrite(message),
-        OverwritePolicy::Force => Ok(true),
+fn authorize_overwrite(policy: OverwritePolicy, required: bool) -> Result<bool> {
+    if !required || matches!(policy, OverwritePolicy::Force) {
+        return Ok(true);
     }
+
+    confirm_overwrite("Overwrite existing installation?")
 }
 
 fn validate_single_component(value: &str) -> Result<()> {
@@ -265,13 +263,28 @@ fn add_binary(
     let name = util::command_name(source)?;
     let bin_dir = root.join("bin");
 
-    // A binary cannot replace a package entry.
-    if manifest
+    let package_owner = manifest
+        .packages
+        .iter()
+        .find_map(|(package_name, package)| {
+            package
+                .entries
+                .contains_key(&name)
+                .then(|| package_name.clone())
+        });
+
+    let package_owner_count = manifest
         .packages
         .values()
-        .any(|p| p.entries.contains_key(&name))
-    {
-        bail!("entry `{name}` belongs to an installed package and cannot be replaced by a binary");
+        .filter(|package| package.entries.contains_key(&name))
+        .count();
+
+    if package_owner_count > 1 {
+        bail!("command `{name}` is registered by multiple packages");
+    }
+
+    if package_owner.is_some() && manifest.binaries.contains_key(&name) {
+        bail!("command `{name}` has conflicting binary and package records");
     }
 
     let old_record = manifest.binaries.get(&name);
@@ -301,12 +314,34 @@ fn add_binary(
         None
     };
 
-    // An occupied destination is only acceptable when it is the old
-    // binary registered under this exact command name.
+    let package_launcher = if let Some(package_name) = &package_owner {
+        let package = manifest
+            .packages
+            .get(package_name)
+            .context("The package record disappeared unexpectedly")?;
+        validate_single_component(&package.directory)?;
+
+        let launcher = launcher_path(&bin_dir, &name);
+        if util::path_occupied(&launcher) {
+            validate_managed_launcher(&launcher, &bin_dir, &root.join("packages"))?;
+        }
+
+        Some((
+            launcher,
+            root.join("packages").join(&package.directory),
+            package.entries.len() == 1,
+        ))
+    } else {
+        None
+    };
+
     if util::path_occupied(&destination) {
         let is_old_binary = old_binary.as_deref() == Some(destination.as_path());
+        let is_package_launcher = package_launcher
+            .as_ref()
+            .map_or(false, |(launcher, _, _)| launcher == &destination);
 
-        if !is_old_binary {
+        if !is_old_binary && !is_package_launcher {
             bail!(
                 "destination already exists and is not managed by binage: {}",
                 destination.display()
@@ -314,14 +349,7 @@ fn add_binary(
         }
     }
 
-    if has_old_record
-        && !authorize_overwrite(
-            policy,
-            &format!(
-                "Binary `{name}` is already managed by binage. Overwrite it?"
-            ),
-        )?
-    {
+    if !authorize_overwrite(policy, has_old_record || package_launcher.is_some())? {
         println!("Cancelled.");
         return Ok(());
     }
@@ -333,6 +361,15 @@ fn add_binary(
         // Stage the old binary.
         if let Some(old_path) = &old_binary {
             move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
+        }
+
+        // Stage the old package launcher and remove its package directory
+        // only when this was the package's final command.
+        if let Some((launcher, package_dir, is_last_entry)) = &package_launcher {
+            move_to_backup(launcher, &backup_dir, backups.len(), &mut backups)?;
+            if *is_last_entry {
+                move_to_backup(package_dir, &backup_dir, backups.len(), &mut backups)?;
+            }
         }
 
         // Stage the Unix extensionless .exe alias, if present.
@@ -362,6 +399,22 @@ fn add_binary(
 
             let alias = bin_dir.join(&name);
             symlink(&destination, &alias)?;
+        }
+
+        if let Some(package_name) = &package_owner {
+            let package_is_empty = {
+                let package = manifest
+                    .packages
+                    .get_mut(package_name)
+                    .context("The package record disappeared unexpectedly")?;
+
+                package.entries.remove(&name);
+                package.entries.is_empty()
+            };
+
+            if package_is_empty {
+                manifest.packages.remove(package_name);
+            }
         }
 
         manifest.binaries.insert(
@@ -431,26 +484,14 @@ fn add_package(
         );
     }
 
-    if old_package.is_some() {
-        if util::path_occupied(&destination) {
-            let metadata = fs::symlink_metadata(&destination)?;
+    if old_package.is_some() && util::path_occupied(&destination) {
+        let metadata = fs::symlink_metadata(&destination)?;
 
-            if !metadata.file_type().is_dir() {
-                bail!(
-                    "Refusing to overwrite a package path that is not a directory: {}",
-                    destination.display()
-                );
-            }
-        }
-
-        if !authorize_overwrite(
-            policy,
-            &format!(
-                "Package `{package_name}` is already managed by binage. Overwrite it?"
-            ),
-        )? {
-            println!("Cancelled.");
-            return Ok(());
+        if !metadata.file_type().is_dir() {
+            bail!(
+                "Refusing to overwrite a package path that is not a directory: {}",
+                destination.display()
+            );
         }
     }
 
@@ -475,12 +516,7 @@ fn add_package(
 
         let name = util::command_name(&entry)?;
 
-        // An entry can reuse a name from this package being replaced,
-        // but cannot take a name from another package or a binary.
-        if manifest.binaries.contains_key(&name) {
-            bail!("entry name `{name}` is already registered as a binary");
-        }
-
+        // A standalone binary with this name can be replaced transactionally.
         let belongs_to_other_package = manifest.packages.iter().any(|(existing_name, package)| {
             existing_name != &package_name && package.entries.contains_key(&name)
         });
@@ -502,6 +538,36 @@ fn add_package(
 
     reject_symlinks(source)?;
 
+    // Collect binaries whose command names are being transferred to this package.
+    let mut binary_replacements = Vec::new();
+
+    for (name, _) in &names {
+        if let Some(record) = manifest.binaries.get(name) {
+            validate_single_component(&record.file_name)?;
+
+            let binary_path = bin_dir.join(&record.file_name);
+            if util::path_occupied(&binary_path) {
+                validate_managed_binary(&binary_path)?;
+            }
+
+            #[cfg(unix)]
+            let binary_alias = {
+                let alias = bin_dir.join(name);
+                if alias != binary_path && util::path_occupied(&alias) {
+                    validate_managed_binary_alias(&alias, &binary_path)?;
+                    Some(alias)
+                } else {
+                    None
+                }
+            };
+
+            #[cfg(not(unix))]
+            let binary_alias: Option<PathBuf> = None;
+
+            binary_replacements.push((name.clone(), binary_path, binary_alias));
+        }
+    }
+
     // Validate all existing launchers belonging to the package before
     // moving or replacing anything.
     let mut old_launchers = Vec::new();
@@ -518,18 +584,45 @@ fn add_package(
         }
     }
 
+    if !authorize_overwrite(
+        policy,
+        old_package.is_some() || !binary_replacements.is_empty(),
+    )? {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
     let backup_dir = create_backup_dir(root)?;
     let mut backups = Vec::new();
     let mut created_launchers = Vec::new();
 
     let result = (|| -> Result<()> {
-        // Stage old launchers first.
-        for (index, launcher) in old_launchers.iter().enumerate() {
-            move_to_backup(launcher, &backup_dir, index, &mut backups)?;
+        // Stage old package launchers first.
+        let mut staged_paths = Vec::new();
+        for launcher in &old_launchers {
+            if !staged_paths.contains(launcher) {
+                move_to_backup(launcher, &backup_dir, backups.len(), &mut backups)?;
+                staged_paths.push(launcher.clone());
+            }
+        }
+
+        // Stage the old standalone binaries and their Unix aliases.
+        for (_, binary_path, alias) in &binary_replacements {
+            if !staged_paths.contains(binary_path) {
+                move_to_backup(binary_path, &backup_dir, backups.len(), &mut backups)?;
+                staged_paths.push(binary_path.clone());
+            }
+
+            if let Some(alias) = alias {
+                if !staged_paths.contains(alias) {
+                    move_to_backup(alias, &backup_dir, backups.len(), &mut backups)?;
+                    staged_paths.push(alias.clone());
+                }
+            }
         }
 
         // Stage the old package directory.
-        move_to_backup(&destination, &backup_dir, old_launchers.len(), &mut backups)?;
+        move_to_backup(&destination, &backup_dir, backups.len(), &mut backups)?;
 
         // Check that new names do not collide with unrelated files.
         for (name, _) in &names {
@@ -545,6 +638,11 @@ fn add_package(
             util::ensure_executable(&target)?;
             create_launcher(&bin_dir, name, &target)?;
             created_launchers.push(name.clone());
+        }
+
+        // Transfer command ownership from standalone binaries to this package.
+        for (name, _, _) in &binary_replacements {
+            manifest.binaries.remove(name);
         }
 
         manifest.packages.insert(
@@ -703,21 +801,27 @@ fn validate_managed_launcher(launcher: &Path, bin_dir: &Path, packages_dir: &Pat
             );
         }
 
-        let contents = fs::read_to_string(launcher)?;
+        let relative_target = crate::shim::read_target(launcher)
+            .with_context(|| format!("Cannot validate binage launcher: {}", launcher.display()))?;
 
-        let has_marker = contents
-            .lines()
-            .any(|line| line.trim() == "rem binage-managed-launcher");
+        let root = bin_dir
+            .parent()
+            .context("bin directory has no parent")?;
+        let resolved_target = fs::canonicalize(root.join(relative_target))
+            .with_context(|| format!("Cannot resolve launcher target: {}", launcher.display()))?;
+        let packages_root = fs::canonicalize(packages_dir).with_context(|| {
+            format!(
+                "Cannot resolve package directory: {}",
+                packages_dir.display()
+            )
+        })?;
 
-        if !has_marker {
+        if !resolved_target.starts_with(&packages_root) {
             bail!(
-                "Refusing to overwrite a launcher without the binage ownership marker: {}",
+                "Refusing to overwrite a launcher pointing outside the package directory: {}",
                 launcher.display()
             );
         }
-
-        let _ = bin_dir;
-        let _ = packages_dir;
     }
 
     Ok(())
