@@ -16,8 +16,9 @@ pub enum Command {
         #[arg(long)]
         path: Option<PathBuf>,
     },
+	/// Remove binage-managed files and configuration.
     Destruct,
-    /// Install a single binary, or a directory with one or more entry files.
+    /// Install a single binary, or a directory with entry files.
     Add {
         /// Source file or directory.
         source: PathBuf,
@@ -26,6 +27,7 @@ pub enum Command {
         entries: Vec<PathBuf>,
     },
     /// List installed command entries.
+	#[command(visible_alias = "list")]
     Ls,
     /// Uninstall an installed entry by its command name.
     Remove {

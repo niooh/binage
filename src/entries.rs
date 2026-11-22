@@ -37,7 +37,10 @@ pub fn print(entries: &[Entry], query: Option<&str>) {
         .unwrap_or(4)
         .max(20);
 
-    println!("{:<name_width$} LOCATION", "NAME");
+	println!(
+		"\x1b[34m{:<name_width$} LOCATION\x1b[0m",
+		"NAME"
+	);
 
     for entry in entries {
         let name = match query {
