@@ -272,13 +272,16 @@ fn add_binary(
             validate_managed_binary(&old_path)?;
         }
 
-        #[cfg(unix)]
-        {
-            let alias = bin_dir.join(&name);
-            if util::path_occupied(&alias) {
-                validate_managed_binary_alias(&alias, &old_path)?;
-            }
-        }
+	#[cfg(unix)]
+	{
+		let alias = bin_dir.join(&name);
+
+		// When the binary filename is already the command name,
+		// the binary and its alias are the same path.
+		if alias != old_path && util::path_occupied(&alias) {
+			validate_managed_binary_alias(&alias, &old_path)?;
+		}
+	}
 
         Some(old_path)
     } else {
@@ -317,13 +320,15 @@ fn add_binary(
             move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
         }
 
-        // Stage the Unix extensionless .exe alias, if present.
-        #[cfg(unix)]
-        if has_old_record {
-            let alias = bin_dir.join(&name);
-            move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
-        }
+		#[cfg(unix)]
+		if let Some(old_path) = &old_binary {
+			let alias = bin_dir.join(&name);
 
+			// Do not back up the same path twice.
+			if alias != *old_path {
+				move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
+			}
+		}
         // Check for other command-name conflicts after staging the
         // old managed binary and its alias.
         util::check_entry_available(&bin_dir, &name)?;
