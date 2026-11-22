@@ -1,8 +1,5 @@
 use anyhow::{bail, Context, Result};
-use std::{
-    fs, io,
-    path::{Component, Path},
-};
+use std::{fs, io, path::Path};
 
 /// Return the command name for an executable entry.
 ///
@@ -35,6 +32,28 @@ pub fn command_name(path: &Path) -> Result<String> {
     }
 
     Ok(name)
+}
+
+
+/// Ensure that the current file owner can execute an installed command.
+#[cfg(unix)]
+pub fn ensure_executable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata = fs::metadata(path)
+        .with_context(|| format!("cannot inspect executable: {}", path.display()))?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(permissions.mode() | 0o100);
+
+    fs::set_permissions(path, permissions)
+        .with_context(|| format!("cannot set executable permissions: {}", path.display()))?;
+
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub fn ensure_executable(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 /// Copy a file without overwriting an existing destination.
@@ -119,19 +138,6 @@ pub fn copy_dir(source: &Path, destination: &Path) -> Result<()> {
 /// Check whether a path exists, including dangling symlinks.
 pub fn path_occupied(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
-}
-
-pub fn validate_single_component(value: &str) -> Result<()> {
-    let path = Path::new(value);
-
-    if value.is_empty()
-        || path.components().count() != 1
-        || !matches!(path.components().next(), Some(Component::Normal(_)))
-    {
-        bail!("Invalid managed path: {value}");
-    }
-
-    Ok(())
 }
 
 /// Check Windows command-name conflicts.

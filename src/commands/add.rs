@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
     fs,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -77,11 +77,27 @@ fn confirm_overwrite(message: &str) -> Result<bool> {
     Ok(matches!(input.trim(), "y" | "Y"))
 }
 
-fn authorize_overwrite(policy: OverwritePolicy, message: &str) -> Result<bool> {
+fn authorize_overwrite(
+    policy: OverwritePolicy,
+    message: &str,
+) -> Result<bool> {
     match policy {
         OverwritePolicy::Ask => confirm_overwrite(message),
         OverwritePolicy::Force => Ok(true),
     }
+}
+
+fn validate_single_component(value: &str) -> Result<()> {
+    let path = Path::new(value);
+
+    if value.is_empty()
+        || path.components().count() != 1
+        || !matches!(path.components().next(), Some(Component::Normal(_)))
+    {
+        bail!("Invalid managed path: {value}");
+    }
+
+    Ok(())
 }
 
 /// Create a temporary backup directory under the installation root.
@@ -264,7 +280,7 @@ fn add_binary(
     let destination = bin_dir.join(file_name);
 
     let old_binary = if let Some(record) = old_record {
-        util::validate_single_component(&record.file_name)?;
+        validate_single_component(&record.file_name)?;
 
         let old_path = bin_dir.join(&record.file_name);
 
@@ -272,16 +288,13 @@ fn add_binary(
             validate_managed_binary(&old_path)?;
         }
 
-	#[cfg(unix)]
-	{
-		let alias = bin_dir.join(&name);
-
-		// When the binary filename is already the command name,
-		// the binary and its alias are the same path.
-		if alias != old_path && util::path_occupied(&alias) {
-			validate_managed_binary_alias(&alias, &old_path)?;
-		}
-	}
+        #[cfg(unix)]
+        {
+            let alias = bin_dir.join(&name);
+            if alias != old_path && util::path_occupied(&alias) {
+                validate_managed_binary_alias(&alias, &old_path)?;
+            }
+        }
 
         Some(old_path)
     } else {
@@ -304,7 +317,9 @@ fn add_binary(
     if has_old_record
         && !authorize_overwrite(
             policy,
-            &format!("Binary `{name}` is already managed by binage. Overwrite it?"),
+            &format!(
+                "Binary `{name}` is already managed by binage. Overwrite it?"
+            ),
         )?
     {
         println!("Cancelled.");
@@ -320,15 +335,15 @@ fn add_binary(
             move_to_backup(old_path, &backup_dir, backups.len(), &mut backups)?;
         }
 
-		#[cfg(unix)]
-		if let Some(old_path) = &old_binary {
-			let alias = bin_dir.join(&name);
+        // Stage the Unix extensionless .exe alias, if present.
+        #[cfg(unix)]
+        if has_old_record {
+            let alias = bin_dir.join(&name);
+            if Some(alias.as_path()) != old_binary.as_deref() {
+                move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
+            }
+        }
 
-			// Do not back up the same path twice.
-			if alias != *old_path {
-				move_to_backup(&alias, &backup_dir, backups.len(), &mut backups)?;
-			}
-		}
         // Check for other command-name conflicts after staging the
         // old managed binary and its alias.
         util::check_entry_available(&bin_dir, &name)?;
@@ -338,6 +353,7 @@ fn add_binary(
         }
 
         util::copy_file(source, &destination)?;
+        util::ensure_executable(&destination)?;
 
         // Unix needs an extensionless alias for .exe files.
         #[cfg(unix)]
@@ -360,12 +376,18 @@ fn add_binary(
         Ok(())
     })();
 
-    finish_transaction(&backup_dir, &backups, result, "Installation failed", || {
-        let _ = fs::remove_file(&destination);
+    finish_transaction(
+        &backup_dir,
+        &backups,
+        result,
+        "Installation failed",
+        || {
+            let _ = fs::remove_file(&destination);
 
-        #[cfg(unix)]
-        let _ = fs::remove_file(bin_dir.join(&name));
-    })?;
+            #[cfg(unix)]
+            let _ = fs::remove_file(bin_dir.join(&name));
+        },
+    )?;
 
     println!("Installed binary: {name}");
 
@@ -396,7 +418,7 @@ fn add_package(
     let old_package = manifest.packages.get(&package_name);
 
     let destination = if let Some(package) = old_package {
-        util::validate_single_component(&package.directory)?;
+        validate_single_component(&package.directory)?;
         packages_dir.join(&package.directory)
     } else {
         packages_dir.join(&package_name)
@@ -423,7 +445,9 @@ fn add_package(
 
         if !authorize_overwrite(
             policy,
-            &format!("Package `{package_name}` is already managed by binage. Overwrite it?"),
+            &format!(
+                "Package `{package_name}` is already managed by binage. Overwrite it?"
+            ),
         )? {
             println!("Cancelled.");
             return Ok(());
@@ -518,6 +542,7 @@ fn add_package(
         for (name, relative) in &names {
             let target = destination.join(relative);
 
+            util::ensure_executable(&target)?;
             create_launcher(&bin_dir, name, &target)?;
             created_launchers.push(name.clone());
         }
@@ -595,21 +620,36 @@ fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
+fn create_launcher(
+    bin_dir: &Path,
+    name: &str,
+    target: &Path,
+) -> Result<()> {
     let launcher = bin_dir.join(format!("{name}.exe"));
 
     if util::path_occupied(&launcher) {
         bail!("launcher already exists: {}", launcher.display());
     }
 
-    let root = bin_dir.parent().context("bin directory has no parent")?;
+    let root = bin_dir
+        .parent()
+        .context("bin directory has no parent")?;
 
     let relative_target = target
         .strip_prefix(root)
         .context("launcher target is outside binage root")?;
 
-    crate::shim::write_launcher(crate::SHIM_TEMPLATE, &launcher, relative_target)
-        .with_context(|| format!("failed to create launcher: {}", launcher.display()))?;
+	crate::shim::write_launcher(
+		crate::SHIM_TEMPLATE,
+		&launcher,
+		relative_target,
+	)
+    .with_context(|| {
+        format!(
+            "failed to create launcher: {}",
+            launcher.display()
+        )
+    })?;
 
     Ok(())
 }
