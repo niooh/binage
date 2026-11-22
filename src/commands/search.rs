@@ -1,10 +1,6 @@
 use anyhow::{bail, Result};
 
-use crate::{
-    config,
-    entries,
-    manifest::Manifest,
-};
+use crate::{config, entries, manifest::Manifest};
 
 pub fn run(query: &str) -> Result<()> {
     if query.trim().is_empty() {
@@ -19,9 +15,7 @@ pub fn run(query: &str) -> Result<()> {
 
     let matched: Vec<_> = all_entries
         .into_iter()
-        .filter(|entry| {
-            entry.name.to_ascii_lowercase().contains(&normalized_query)
-        })
+        .filter(|entry| entry.name.to_ascii_lowercase().contains(&normalized_query))
         .collect();
 
     if matched.is_empty() {

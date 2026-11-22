@@ -1,5 +1,8 @@
 use anyhow::{bail, Context, Result};
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Component, Path},
+};
 
 /// Return the command name for an executable entry.
 ///
@@ -116,6 +119,19 @@ pub fn copy_dir(source: &Path, destination: &Path) -> Result<()> {
 /// Check whether a path exists, including dangling symlinks.
 pub fn path_occupied(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
+}
+
+pub fn validate_single_component(value: &str) -> Result<()> {
+    let path = Path::new(value);
+
+    if value.is_empty()
+        || path.components().count() != 1
+        || !matches!(path.components().next(), Some(Component::Normal(_)))
+    {
+        bail!("Invalid managed path: {value}");
+    }
+
+    Ok(())
 }
 
 /// Check Windows command-name conflicts.

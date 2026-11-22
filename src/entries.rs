@@ -37,10 +37,7 @@ pub fn print(entries: &[Entry], query: Option<&str>) {
         .unwrap_or(4)
         .max(20);
 
-	println!(
-		"\x1b[34m{:<name_width$} LOCATION\x1b[0m",
-		"NAME"
-	);
+    println!("\x1b[34m{:<name_width$} LOCATION\x1b[0m", "NAME");
 
     for entry in entries {
         let name = match query {
@@ -50,12 +47,7 @@ pub fn print(entries: &[Entry], query: Option<&str>) {
 
         let padding = name_width.saturating_sub(entry.name.chars().count());
 
-        println!(
-            "{}{} {}",
-            name,
-            " ".repeat(padding),
-            entry.location
-        );
+        println!("{}{} {}", name, " ".repeat(padding), entry.location);
     }
 }
 

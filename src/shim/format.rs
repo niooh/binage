@@ -45,10 +45,7 @@ pub fn write_launcher(template: &[u8], output: &Path, target: &Path) -> io::Resu
     }
 
     let path_len = u32::try_from(wide.len())
-        .map_err(|_| io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "target path is too long",
-        ))?;
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "target path is too long"))?;
 
     let result = (|| -> io::Result<()> {
         let mut output_file = OpenOptions::new()

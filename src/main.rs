@@ -10,8 +10,7 @@ mod util;
 mod shim;
 
 #[cfg(windows)]
-static SHIM_TEMPLATE: &[u8] =
-    include_bytes!(env!("BINAGE_SHIM_PATH"));
+static SHIM_TEMPLATE: &[u8] = include_bytes!(env!("BINAGE_SHIM_PATH"));
 
 use anyhow::Result;
 use clap::Parser;
@@ -28,9 +27,13 @@ fn run() -> Result<()> {
     match cli.command {
         cli::Command::Init { path } => commands::init::run(path),
         cli::Command::Destruct => commands::destruct::run(),
-        cli::Command::Add { source, entries } => commands::add::run(source, entries),
+        cli::Command::Add {
+            source,
+            entries,
+            force,
+        } => commands::add::run(source, entries, force),
         cli::Command::Remove { entry } => commands::remove::run(&entry),
-		cli::Command::Search { query } => commands::search::run(&query),
+        cli::Command::Search { query } => commands::search::run(&query),
         cli::Command::Ls => commands::ls::run(),
     }
 }

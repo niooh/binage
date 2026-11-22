@@ -3,7 +3,7 @@ use std::{
     collections::BTreeMap,
     fs,
     io::{self, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -15,7 +15,19 @@ use crate::{
 
 static BACKUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-pub fn run(source: PathBuf, entries: Vec<PathBuf>) -> Result<()> {
+#[derive(Debug, Clone, Copy)]
+enum OverwritePolicy {
+    Ask,
+    Force,
+}
+
+pub fn run(source: PathBuf, entries: Vec<PathBuf>, force: bool) -> Result<()> {
+    let policy = if force {
+        OverwritePolicy::Force
+    } else {
+        OverwritePolicy::Ask
+    };
+
     let root = config::root_from_manifest()?;
     let manifest_path = root.join(MANIFEST_FILE);
 
@@ -30,11 +42,25 @@ pub fn run(source: PathBuf, entries: Vec<PathBuf>) -> Result<()> {
     let source = fs::canonicalize(&source)?;
 
     if source.is_file() {
-        return add_binary(&root, &manifest_path, &mut manifest, &source, entries);
+        return add_binary(
+            &root,
+            &manifest_path,
+            &mut manifest,
+            &source,
+            entries,
+            policy,
+        );
     }
 
     if source.is_dir() {
-        return add_package(&root, &manifest_path, &mut manifest, &source, entries);
+        return add_package(
+            &root,
+            &manifest_path,
+            &mut manifest,
+            &source,
+            entries,
+            policy,
+        );
     }
 
     bail!("source must be a regular file or directory");
@@ -51,17 +77,11 @@ fn confirm_overwrite(message: &str) -> Result<bool> {
     Ok(matches!(input.trim(), "y" | "Y"))
 }
 
-fn validate_single_component(value: &str) -> Result<()> {
-    let path = Path::new(value);
-
-    if value.is_empty()
-        || path.components().count() != 1
-        || !matches!(path.components().next(), Some(Component::Normal(_)))
-    {
-        bail!("Invalid managed path: {value}");
+fn authorize_overwrite(policy: OverwritePolicy, message: &str) -> Result<bool> {
+    match policy {
+        OverwritePolicy::Ask => confirm_overwrite(message),
+        OverwritePolicy::Force => Ok(true),
     }
-
-    Ok(())
 }
 
 /// Create a temporary backup directory under the installation root.
@@ -123,6 +143,39 @@ fn restore_backups(backups: &[(PathBuf, PathBuf)]) -> Result<()> {
 
 fn finish_backup(backup_dir: &Path) {
     let _ = fs::remove_dir_all(backup_dir);
+}
+
+/// Finish an installation transaction and restore staged files on failure.
+///
+/// The backup directory is deliberately retained if restoration fails, so
+/// files that could not be restored are not deleted with the temporary backup.
+fn finish_transaction<T>(
+    backup_dir: &Path,
+    backups: &[(PathBuf, PathBuf)],
+    result: Result<T>,
+    failure_context: &str,
+    rollback: impl FnOnce(),
+) -> Result<T> {
+    match result {
+        Ok(value) => {
+            finish_backup(backup_dir);
+            Ok(value)
+        }
+        Err(error) => {
+            rollback();
+
+            match restore_backups(backups) {
+                Ok(()) => {
+                    finish_backup(backup_dir);
+                    Err(error)
+                }
+                Err(restore_error) => Err(restore_error.context(format!(
+                    "{failure_context}: {error:#}. Backup files have been retained at {}",
+                    backup_dir.display()
+                ))),
+            }
+        }
+    }
 }
 
 fn launcher_path(bin_dir: &Path, name: &str) -> PathBuf {
@@ -187,6 +240,7 @@ fn add_binary(
     manifest: &mut Manifest,
     source: &Path,
     entries: Vec<PathBuf>,
+    policy: OverwritePolicy,
 ) -> Result<()> {
     if !entries.is_empty() {
         bail!("-e can only be used with a directory");
@@ -210,7 +264,7 @@ fn add_binary(
     let destination = bin_dir.join(file_name);
 
     let old_binary = if let Some(record) = old_record {
-        validate_single_component(&record.file_name)?;
+        util::validate_single_component(&record.file_name)?;
 
         let old_path = bin_dir.join(&record.file_name);
 
@@ -244,13 +298,14 @@ fn add_binary(
         }
     }
 
-    if has_old_record {
-        if !confirm_overwrite(&format!(
-            "Binary `{name}` is already managed by binage. Overwrite it?"
-        ))? {
-            println!("Cancelled.");
-            return Ok(());
-        }
+    if has_old_record
+        && !authorize_overwrite(
+            policy,
+            &format!("Binary `{name}` is already managed by binage. Overwrite it?"),
+        )?
+    {
+        println!("Cancelled.");
+        return Ok(());
     }
 
     let backup_dir = create_backup_dir(root)?;
@@ -300,23 +355,12 @@ fn add_binary(
         Ok(())
     })();
 
-    if let Err(error) = result {
+    finish_transaction(&backup_dir, &backups, result, "Installation failed", || {
         let _ = fs::remove_file(&destination);
 
         #[cfg(unix)]
         let _ = fs::remove_file(bin_dir.join(&name));
-
-        let restore_result = restore_backups(&backups);
-        finish_backup(&backup_dir);
-
-        if let Err(restore_error) = restore_result {
-            return Err(restore_error.context(format!("Installation failed: {error:#}")));
-        }
-
-        return Err(error);
-    }
-
-    finish_backup(&backup_dir);
+    })?;
 
     println!("Installed binary: {name}");
 
@@ -329,6 +373,7 @@ fn add_package(
     manifest: &mut Manifest,
     source: &Path,
     entries: Vec<PathBuf>,
+    policy: OverwritePolicy,
 ) -> Result<()> {
     if entries.is_empty() {
         bail!("directory installs require at least one -e FILE");
@@ -346,7 +391,7 @@ fn add_package(
     let old_package = manifest.packages.get(&package_name);
 
     let destination = if let Some(package) = old_package {
-        validate_single_component(&package.directory)?;
+        util::validate_single_component(&package.directory)?;
         packages_dir.join(&package.directory)
     } else {
         packages_dir.join(&package_name)
@@ -371,9 +416,10 @@ fn add_package(
             }
         }
 
-        if !confirm_overwrite(&format!(
-            "Package `{package_name}` is already managed by binage. Overwrite it?"
-        ))? {
+        if !authorize_overwrite(
+            policy,
+            &format!("Package `{package_name}` is already managed by binage. Overwrite it?"),
+        )? {
             println!("Cancelled.");
             return Ok(());
         }
@@ -488,21 +534,16 @@ fn add_package(
         Ok(())
     })();
 
-    if let Err(error) = result {
-        rollback_launchers(&bin_dir, &created_launchers);
-        let _ = fs::remove_dir_all(&destination);
-
-        let restore_result = restore_backups(&backups);
-        finish_backup(&backup_dir);
-
-        if let Err(restore_error) = restore_result {
-            return Err(restore_error.context(format!("Package installation failed: {error:#}")));
-        }
-
-        return Err(error);
-    }
-
-    finish_backup(&backup_dir);
+    finish_transaction(
+        &backup_dir,
+        &backups,
+        result,
+        "Package installation failed",
+        || {
+            rollback_launchers(&bin_dir, &created_launchers);
+            let _ = fs::remove_dir_all(&destination);
+        },
+    )?;
 
     println!(
         "Installed package `{package_name}` with {} entries",
@@ -549,36 +590,21 @@ fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
 }
 
 #[cfg(windows)]
-fn create_launcher(
-    bin_dir: &Path,
-    name: &str,
-    target: &Path,
-) -> Result<()> {
+fn create_launcher(bin_dir: &Path, name: &str, target: &Path) -> Result<()> {
     let launcher = bin_dir.join(format!("{name}.exe"));
 
     if util::path_occupied(&launcher) {
         bail!("launcher already exists: {}", launcher.display());
     }
 
-    let root = bin_dir
-        .parent()
-        .context("bin directory has no parent")?;
+    let root = bin_dir.parent().context("bin directory has no parent")?;
 
     let relative_target = target
         .strip_prefix(root)
         .context("launcher target is outside binage root")?;
 
-	crate::shim::write_launcher(
-		crate::SHIM_TEMPLATE,
-		&launcher,
-		relative_target,
-	)
-    .with_context(|| {
-        format!(
-            "failed to create launcher: {}",
-            launcher.display()
-        )
-    })?;
+    crate::shim::write_launcher(crate::SHIM_TEMPLATE, &launcher, relative_target)
+        .with_context(|| format!("failed to create launcher: {}", launcher.display()))?;
 
     Ok(())
 }

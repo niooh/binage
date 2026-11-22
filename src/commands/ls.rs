@@ -1,10 +1,6 @@
 use anyhow::Result;
 
-use crate::{
-    config,
-    entries,
-    manifest::Manifest,
-};
+use crate::{config, entries, manifest::Manifest};
 
 pub fn run() -> Result<()> {
     let root = config::root_from_manifest()?;

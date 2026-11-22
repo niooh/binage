@@ -16,26 +16,29 @@ pub enum Command {
         #[arg(long)]
         path: Option<PathBuf>,
     },
-	/// Remove binage-managed files and configuration.
+    /// Remove binage-managed files and configuration.
     Destruct,
     /// Install a single binary, or a directory with entry files.
     Add {
         /// Source file or directory.
         source: PathBuf,
+
         /// Executable files relative to SOURCE (required when SOURCE is a directory).
         #[arg(short = 'e', long = "entry", num_args = 1.., value_name = "FILE")]
         entries: Vec<PathBuf>,
+
+        /// Overwrite existing binage-managed installations without prompting.
+        #[arg(short = 'f', long = "force")]
+        force: bool,
     },
     /// List installed command entries.
-	#[command(visible_alias = "list")]
+    #[command(visible_alias = "list")]
     Ls,
     /// Uninstall an installed entry by its command name.
-    Remove {
-        entry: String,
+    Remove { entry: String },
+    /// Search installed commands by partial name.
+    Search {
+        /// Keyword to search for.
+        query: String,
     },
-	/// Search installed commands by partial name.
-	Search {
-		/// Keyword to search for.
-		query: String,
-	},
 }
