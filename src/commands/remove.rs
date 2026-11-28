@@ -76,8 +76,8 @@ pub fn run(name: &str) -> Result<()> {
     // Validate ownership before changing the manifest.
     let launcher_exists = validate_managed_launcher(&launcher_path, &bin_dir, &packages_dir)?;
 
-    validate_single_component(&package.directory)?;
-    let package_directory = packages_dir.join(&package.directory);
+	validate_single_component(&package_name)?;
+	let package_directory = packages_dir.join(&package_name);
 
     let package_is_empty = package.entries.len() == 1;
 

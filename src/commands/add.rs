@@ -313,26 +313,27 @@ fn add_binary(
         None
     };
 
-    let package_launcher = if let Some(package_name) = &package_owner {
-        let package = manifest
-            .packages
-            .get(package_name)
-            .context("The package record disappeared unexpectedly")?;
-        validate_single_component(&package.directory)?;
+	let package_launcher = if let Some(package_name) = &package_owner {
+		let package = manifest
+			.packages
+			.get(package_name)
+			.context("The package record disappeared unexpectedly")?;
 
-        let launcher = launcher_path(&bin_dir, &name);
-        if util::path_occupied(&launcher) {
-            validate_managed_launcher(&launcher, &bin_dir, &root.join("packages"))?;
-        }
+		validate_single_component(package_name)?;
 
-        Some((
-            launcher,
-            root.join("packages").join(&package.directory),
-            package.entries.len() == 1,
-        ))
-    } else {
-        None
-    };
+		let launcher = launcher_path(&bin_dir, &name);
+		if util::path_occupied(&launcher) {
+			validate_managed_launcher(&launcher, &bin_dir, &root.join("packages"))?;
+		}
+
+		Some((
+			launcher,
+			root.join("packages").join(package_name),
+			package.entries.len() == 1,
+		))
+	} else {
+		None
+	};
 
     if util::path_occupied(&destination) {
         let is_old_binary = old_binary.as_deref() == Some(destination.as_path());
@@ -466,13 +467,8 @@ fn add_package(
     let bin_dir = root.join("bin");
 
     let old_package = manifest.packages.get(&package_name);
-
-    let destination = if let Some(package) = old_package {
-        validate_single_component(&package.directory)?;
-        packages_dir.join(&package.directory)
-    } else {
-        packages_dir.join(&package_name)
-    };
+	validate_single_component(&package_name)?;
+	let destination = packages_dir.join(&package_name);
 
     if old_package.is_none() && util::path_occupied(&destination) {
         bail!(
@@ -641,17 +637,12 @@ fn add_package(
             manifest.binaries.remove(name);
         }
 
-        manifest.packages.insert(
-            package_name.clone(),
-            PackageRecord {
-                directory: destination
-                    .file_name()
-                    .context("package destination has no filename")?
-                    .to_string_lossy()
-                    .into_owned(),
-                entries: selected,
-            },
-        );
+		manifest.packages.insert(
+			package_name.clone(),
+			PackageRecord {
+				entries: selected,
+			},
+		);
 
         manifest.save(manifest_path)?;
 

@@ -16,7 +16,6 @@ pub struct Manifest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageRecord {
-    pub directory: String,
     pub entries: BTreeMap<String, String>,
 }
 

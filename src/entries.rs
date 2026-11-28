@@ -15,14 +15,14 @@ pub fn collect(manifest: &Manifest) -> Vec<Entry> {
 		});
 	}
 
-    for package in manifest.packages.values() {
-        for (name, relative) in &package.entries {
-            entries.push(Entry {
-                name: name.clone(),
-                location: format!("packages/{}/{}", package.directory, relative),
-            });
-        }
-    }
+	for (package_name, package) in &manifest.packages {
+		for (name, relative) in &package.entries {
+			entries.push(Entry {
+				name: name.clone(),
+				location: format!("packages/{package_name}/{relative}"),
+			});
+		}
+	}
 
     entries.sort_by(|a, b| a.name.cmp(&b.name));
 
