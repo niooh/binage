@@ -25,9 +25,9 @@ pub fn run(name: &str) -> Result<()> {
 
     let mut manifest = Manifest::load(&manifest_path)?;
 
-    if let Some(record) = manifest.binaries.get(name) {
-        validate_single_component(&record.file_name)?;
-        let binary_path = bin_dir.join(&record.file_name);
+	if let Some(file_name) = manifest.binaries.get(name) {
+		validate_single_component(file_name)?;
+		let binary_path = bin_dir.join(file_name);
 
         // On Unix, an .exe binary also has an extensionless symlink.
         #[cfg(unix)]

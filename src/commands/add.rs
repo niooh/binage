@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     config::{self, MANIFEST_FILE},
-    manifest::{BinaryRecord, Manifest, PackageRecord},
+    manifest::{Manifest, PackageRecord},
     util,
 };
 
@@ -292,11 +292,10 @@ fn add_binary(
     let file_name = source.file_name().context("missing filename")?;
     let destination = bin_dir.join(file_name);
 
-    let old_binary = if let Some(record) = old_record {
-        validate_single_component(&record.file_name)?;
+	let old_binary = if let Some(file_name) = old_record {
+		validate_single_component(file_name)?;
 
-        let old_path = bin_dir.join(&record.file_name);
-
+		let old_path = bin_dir.join(file_name);
         if util::path_occupied(&old_path) {
             validate_managed_binary(&old_path)?;
         }
@@ -419,9 +418,7 @@ fn add_binary(
 
         manifest.binaries.insert(
             name.clone(),
-            BinaryRecord {
-                file_name: file_name.to_string_lossy().into_owned(),
-            },
+            file_name.to_string_lossy().into_owned(),
         );
 
         manifest.save(manifest_path)?;
@@ -541,10 +538,10 @@ fn add_package(
     let mut binary_replacements = Vec::new();
 
     for (name, _) in &names {
-        if let Some(record) = manifest.binaries.get(name) {
-            validate_single_component(&record.file_name)?;
+        if let Some(file_name) = manifest.binaries.get(name) {
+			validate_single_component(file_name)?;
 
-            let binary_path = bin_dir.join(&record.file_name);
+			let binary_path = bin_dir.join(file_name);
             if util::path_occupied(&binary_path) {
                 validate_managed_binary(&binary_path)?;
             }

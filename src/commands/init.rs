@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     config,
-    manifest::{BinaryRecord, Manifest},
+    manifest::Manifest,
     platform, util,
 };
 
@@ -143,7 +143,7 @@ fn install_self(bin_dir: &Path, manifest_path: &Path, manifest: &mut Manifest) -
         }
     }
 
-    manifest.binaries.insert(name, BinaryRecord { file_name });
+    manifest.binaries.insert(name, file_name);
 
     if let Err(error) = manifest.save(manifest_path) {
         if !already_installed {

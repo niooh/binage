@@ -8,12 +8,12 @@ pub struct Entry {
 pub fn collect(manifest: &Manifest) -> Vec<Entry> {
     let mut entries = Vec::new();
 
-    for (name, record) in &manifest.binaries {
-        entries.push(Entry {
-            name: name.clone(),
-            location: format!("bin/{}", record.file_name),
-        });
-    }
+	for (name, file_name) in &manifest.binaries {
+		entries.push(Entry {
+			name: name.clone(),
+			location: format!("bin/{file_name}"),
+		});
+	}
 
     for package in manifest.packages.values() {
         for (name, relative) in &package.entries {

@@ -9,14 +9,9 @@ use std::os::windows::ffi::OsStrExt;
 pub struct Manifest {
     pub schema_version: u32,
     #[serde(default)]
-    pub binaries: BTreeMap<String, BinaryRecord>,
+	pub binaries: BTreeMap<String, String>,
     #[serde(default)]
     pub packages: BTreeMap<String, PackageRecord>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BinaryRecord {
-    pub file_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
